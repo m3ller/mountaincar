@@ -37,13 +37,22 @@ class MountainCarLearner():
   
     """ Go through one episode (i.e. game) of Mountain Car
     """
-    def run_episode(self):
+    def run_episode(self, sess, pg_obs, pg_prob):
         # Run policy_grad(observation) -> action.
         #   Maximize over predicted value of action
         # env.step(action) -> observation, reward.  Given from game environment
         # After game ends, update/improve value_grad(observation, reward).
         #   Keep track of geometrically summed value
-        pass
+        action = self.env.action_space.sample()  # initial action
+        for _ in xrange(100):
+            self.env.render()
+            observation, reward, done, info = self.env.step(action)
+            action_prob = sess.run(pg_prob, feed_dict={pg_obs: np.expand_dims(observation, 0)})
+            action = np.argmax(action_prob)
+    
+            if done:
+                break
+
   
 def main():
     env = gym.make("MountainCar-v0")
@@ -57,16 +66,9 @@ def main():
     # Run episode
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        action = env.action_space.sample()  # initial action
 
-        for _ in xrange (100):
-            env.render()
-            observation, reward, done, info = env.step(action)
-            action_prob = sess.run(pg_prob, feed_dict={pg_obs: np.expand_dims(observation, 0)})
-            action = np.argmax(action_prob)
-    
-            if done:
-                break
+        for _ in xrange(5):
+            learner.run_episode(sess, pg_obs, pg_prob)
 
 if __name__ == "__main__":
     main()

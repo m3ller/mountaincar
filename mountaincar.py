@@ -2,14 +2,14 @@ import gym
 import numpy as np
 import tensorflow as tf
 
-class MountainCarLearner():
+class ReinforcementLearner():
     # Environment doc: https://github.com/openai/gym/wiki/MountainCar-v0
     # Actions: [0]left push, [1]no push, [2]right push
     # Observations: [0]position, [1]velocity
     def __init__(self, environment):
-        self.ACT_SPACE = 3
-        self.OBS_SPACE = 2
         self.env = environment
+        self.n_act = environment.action_space.n
+        self.n_obs = environment.observation_space.shape[0]
   
     #TODO: add tensorboard
     #TODO: batch the games
@@ -18,9 +18,9 @@ class MountainCarLearner():
     """
     def policy_grad(self):
         # Build network
-        observation = tf.placeholder(tf.float32, [1, self.OBS_SPACE])
-        w = tf.get_variable("pg_weight", [self.OBS_SPACE, self.ACT_SPACE])
-        b = tf.get_variable("pg_bias", [1, self.ACT_SPACE])
+        observation = tf.placeholder(tf.float32, [1, self.n_obs])
+        w = tf.get_variable("pg_weight", [self.n_obs, self.n_act])
+        b = tf.get_variable("pg_bias", [1, self.n_act])
   
         logp = tf.matmul(observation, w) + b
         prob = tf.nn.softmax(logp)
@@ -58,9 +58,8 @@ def main():
     env = gym.make("MountainCar-v0")
     env.reset()
 
-    learner = MountainCarLearner(env)
-
     # Build network
+    learner = ReinforcementLearner(env)
     pg_obs, pg_prob = learner.policy_grad()
    
     # Run episode

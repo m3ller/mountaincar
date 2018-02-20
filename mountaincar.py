@@ -32,14 +32,15 @@ class ReinforcementLearner():
     """
     def value_grad(self):
         # Build network
-        observation = tf.placeholder(tf.float32, [1, self.n_obs])
-        observed_value = tf.placeholder(tf.float32, [1])
+        observation = tf.placeholder(tf.float32, [None, self.n_obs])
+        observed_value = tf.placeholder(tf.float32, [None])
         w = tf.get_variable("vg_weight", [self.n_obs, 1])
         b = tf.get_variable("vg_bias", [1])
 
         expected_value = tf.matmul(observation, w) + b
         diff = tf.abs(expected_value - observed_value)
-        optimizer = tf.train.AdamOptimizer().minimize(diff)
+        loss = tf.reduce_sum(diff)
+        optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         return observation, observed_value, optimizer
   
@@ -101,6 +102,7 @@ def main():
 
         for _ in xrange(5):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
+            learner.update_param(sess, transition_tuple, pg_obs, pg_prob, vg_obs, vg_val, vg_optimizer)
 
 if __name__ == "__main__":
     main()

@@ -41,12 +41,14 @@ class ReinforcementLearner():
         diff = tf.abs(expected_value - observed_value)
         optimizer = tf.train.AdamOptimizer().minimize(diff)
 
-        return observation, optimizer
+        return observation, observed_value, optimizer
   
     """ Go through one episode (i.e. game) of Mountain Car
     """
     def run_episode(self, sess, pg_obs, pg_prob):
-        transitions = []    # Store tuples (observation, action, reward)
+        observations = []
+        actions = []
+        rewards = []
 
         # Play through a game.  
         # Running policy_grad(observation) to produce actions in the game.
@@ -58,21 +60,32 @@ class ReinforcementLearner():
             new_observation, reward, done, info = self.env.step(action)
 
             # Store transistions and update
-            transitions.append((observation, action, reward))
+            observations.append(observation)
+            actions.append(action)
+            rewards.append(reward)
             observation = new_observation
     
             if done:
                 break
 
-        return transitions
+        return observations, actions, rewards
 
     """ Update the parameters in the policy and value networks.
 
     Update is dependent on the observed rewards from the previous game.
     """
-    def update_param(pg_obs, pg_prob, vg_obs, vg_optimizer):
-        pass
+    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, vg_obs, vg_val, vg_optimizer):
+        observations, actions, rewards = transition_tuple
 
+        # Calculate observed value
+        gamma = 0.8
+        for i in xrange(2, len(rewards)+1):
+            rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
+
+        # Update value_grad
+        _ = sess.run(vg_optimizer, feed_dict={vg_obs: observations,
+                                              vg_val: rewards})
+        
   
 def main():
     env = gym.make("MountainCar-v0")
@@ -80,14 +93,14 @@ def main():
     # Build network
     learner = ReinforcementLearner(env)
     pg_obs, pg_prob = learner.policy_grad()
-    vg_obs, vg_optimizer = learner.value_grad()
+    vg_obs, vg_val, vg_optimizer = learner.value_grad()
    
     # Run episode
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
         for _ in xrange(5):
-            transitions = learner.run_episode(sess, pg_obs, pg_prob)
+            transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
 
 if __name__ == "__main__":
     main()

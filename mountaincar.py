@@ -46,20 +46,25 @@ class ReinforcementLearner():
     """ Go through one episode (i.e. game) of Mountain Car
     """
     def run_episode(self, sess, pg_obs, pg_prob):
-        # Run policy_grad(observation) -> action.
-        #   Maximize over predicted value of action
-        # env.step(action) -> observation, reward.  Given from game environment
-        # After game ends, update/improve value_grad(observation, reward).
-        #   Keep track of geometrically summed value
-        action = self.env.action_space.sample()  # initial action
+        transitions = []    # Store tuples (observation, action, reward)
+
+        # Play through a game.  
+        # Running policy_grad(observation) to produce actions in the game.
+        observation = self.env.reset()   # initial observation
         for _ in xrange(100):
             self.env.render()
-            observation, reward, done, info = self.env.step(action)
             action_prob = sess.run(pg_prob, feed_dict={pg_obs: np.expand_dims(observation, 0)})
             action = np.argmax(action_prob)
+            new_observation, reward, done, info = self.env.step(action)
+
+            # Store transistions and update
+            transitions.append((observation, action, reward))
+            observation = new_observation
     
             if done:
                 break
+
+        return transitions
 
     """ Update the parameters in the policy and value networks.
 
@@ -71,19 +76,18 @@ class ReinforcementLearner():
   
 def main():
     env = gym.make("MountainCar-v0")
-    env.reset()
 
     # Build network
     learner = ReinforcementLearner(env)
     pg_obs, pg_prob = learner.policy_grad()
-    vg_obs, vg_optimizer = learner.policy_grad()
+    vg_obs, vg_optimizer = learner.value_grad()
    
     # Run episode
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
         for _ in xrange(5):
-            learner.run_episode(sess, pg_obs, pg_prob)
+            transitions = learner.run_episode(sess, pg_obs, pg_prob)
 
 if __name__ == "__main__":
     main()

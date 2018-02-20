@@ -28,12 +28,20 @@ class ReinforcementLearner():
         # return action, act_loss, optimizer
         return observation, prob
   
-    """ Value network learns to predict the reward (i.e. "future worth") of
-    a given action.
+    """ Value network learns to predict the EXPECTED reward of a given state.
     """
     def value_grad(self):
-        # return value, val_loss, reward, optimizer
-        pass
+        # Build network
+        observation = tf.placeholder(tf.float32, [1, self.n_obs])
+        observed_value = tf.placeholder(tf.float32, [1])
+        w = tf.get_variable("vg_weight", [self.n_obs, 1])
+        b = tf.get_variable("vg_bias", [1])
+
+        expected_value = tf.matmul(observation, w) + b
+        diff = tf.abs(expected_value - observed_value)
+        optimizer = tf.train.AdamOptimizer().minimize(diff)
+
+        return observation, optimizer
   
     """ Go through one episode (i.e. game) of Mountain Car
     """
@@ -53,6 +61,13 @@ class ReinforcementLearner():
             if done:
                 break
 
+    """ Update the parameters in the policy and value networks.
+
+    Update is dependent on the observed rewards from the previous game.
+    """
+    def update_param(pg_obs, pg_prob, vg_obs, vg_optimizer):
+        pass
+
   
 def main():
     env = gym.make("MountainCar-v0")
@@ -61,6 +76,7 @@ def main():
     # Build network
     learner = ReinforcementLearner(env)
     pg_obs, pg_prob = learner.policy_grad()
+    vg_obs, vg_optimizer = learner.policy_grad()
    
     # Run episode
     with tf.Session() as sess:

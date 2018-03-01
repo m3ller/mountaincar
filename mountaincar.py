@@ -13,6 +13,8 @@ class ReinforcementLearner():
   
     #TODO: add tensorboard
     #TODO: batch the games
+    #TODO: figure out normalized way to calculate advantage
+    #TODO: consider regularizing params
     """ Policy network tries to learn the 'best' policy by trying to optimize
     over the predicted reward (as given by value_grad(..)).
     """
@@ -37,12 +39,18 @@ class ReinforcementLearner():
         w = tf.get_variable("vg_weight", [self.n_obs, 1])
         b = tf.get_variable("vg_bias", [1])
 
+        # Calculate and improve V(s) approximation
         expected_value = tf.matmul(observation, w) + b
-        diff = tf.abs(expected_value - observed_value)
-        loss = tf.reduce_sum(diff)
+        diff = expected_value - observed_value
+        loss = tf.reduce_sum(tf.abs(diff))
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
-        return observation, observed_value, optimizer
+        # Calculate the advantage
+        # TODO: improve to a more elegant advantage
+        diff[diff<0] = 0
+        advantage = diff + 1    # Want 0<diff<1 to lead to an increase
+
+        return observation, observed_value, optimizer, advantage
   
     """ Go through one episode (i.e. game) of Mountain Car
     """
@@ -94,7 +102,7 @@ def main():
     # Build network
     learner = ReinforcementLearner(env)
     pg_obs, pg_prob = learner.policy_grad()
-    vg_obs, vg_val, vg_optimizer = learner.value_grad()
+    vg_obs, vg_val, vg_optimizer, vg_advantage = learner.value_grad()
    
     # Run episode
     with tf.Session() as sess:

@@ -46,9 +46,8 @@ class ReinforcementLearner():
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Calculate the advantage
-        # TODO: improve to a more elegant advantage
-        diff[diff<0] = 0
-        advantage = diff + 1    # Want 0<diff<1 to lead to an increase
+        # TODO: May need to fiddle with this advantage
+        advantage = tf.exp(diff)
 
         return observation, observed_value, optimizer, advantage
   
@@ -83,7 +82,7 @@ class ReinforcementLearner():
 
     Update is dependent on the observed rewards from the previous game.
     """
-    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, vg_obs, vg_val, vg_optimizer):
+    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, vg_obs, vg_val, vg_optimizer, vg_advantage):
         observations, actions, rewards = transition_tuple
 
         # Calculate observed value
@@ -92,7 +91,7 @@ class ReinforcementLearner():
             rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
 
         # Update value_grad
-        _ = sess.run(vg_optimizer, feed_dict={vg_obs: observations,
+        _, advantage = sess.run([vg_optimizer, vg_advantage], feed_dict={vg_obs: observations,
                                               vg_val: rewards})
         
   
@@ -110,7 +109,7 @@ def main():
 
         for _ in xrange(5):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
-            learner.update_param(sess, transition_tuple, pg_obs, pg_prob, vg_obs, vg_val, vg_optimizer)
+            learner.update_param(sess, transition_tuple, pg_obs, pg_prob, vg_obs, vg_val, vg_optimizer, vg_advantage)
 
 if __name__ == "__main__":
     main()

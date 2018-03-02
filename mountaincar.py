@@ -87,10 +87,14 @@ class ReinforcementLearner():
 
         # Convert transition lists to arrays
         observations = np.array(observations)
-        actions = np.expand_dims(np.array(actions), 1)
         rewards = np.expand_dims(np.array(rewards), 1)
 
-        return observations, actions, rewards
+        # Convert action choices to one-hots
+        len_act = len(actions)
+        action_onehot = np.zeros((len_act, self.n_act))
+        action_onehot[range(len_act), actions] = 1
+
+        return observations, action_onehot, rewards
 
     """ Update the parameters in the policy and value networks.
 

@@ -20,15 +20,24 @@ class ReinforcementLearner():
     """
     def policy_grad(self):
         # Build network
-        observation = tf.placeholder(tf.float32, [1, self.n_obs])
+        observation = tf.placeholder(tf.float32, [1, self.n_obs], "pg_obs")
         w = tf.get_variable("pg_weight", [self.n_obs, self.n_act])
         b = tf.get_variable("pg_bias", [1, self.n_act])
-  
+
+        # Calculate probability
         logp = tf.matmul(observation, w) + b
         prob = tf.nn.softmax(logp)
+
+        # Update network parameters
+        action = tf.placeholder(tf.float32, [self.n_act], "pg_act")
+        advantage = tf.placeholder(tf.float32, [self.n_act], "pg_advantage")
+        adj_prob = tf.multiply(prob, advantage)  # BE WARY OF BROADCASTING
+        loss = tf.reduce_sum(tf.abs(adj_prob))
+        optimizer = tf.train.AdamOptimizer().minimize(loss)
+
         # Produces an action probability and selects with this distribution
         # return action, act_loss, optimizer
-        return observation, prob
+        return observation, prob, action, advantage, optimizer
   
     """ Value network learns to predict the EXPECTED reward of a given state.
     """
@@ -76,13 +85,18 @@ class ReinforcementLearner():
             if done:
                 break
 
+        # Convert transition lists to arrays
+        observations = np.array(observations)
+        actions = np.expand_dims(np.array(actions), 1)
+        rewards = np.expand_dims(np.array(rewards), 1)
+
         return observations, actions, rewards
 
     """ Update the parameters in the policy and value networks.
 
     Update is dependent on the observed rewards from the previous game.
     """
-    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, vg_obs, vg_val, vg_optimizer, vg_advantage):
+    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, vg_obs, vg_val, vg_optimizer, vg_advantage):
         observations, actions, rewards = transition_tuple
 
         # Calculate observed value
@@ -91,16 +105,19 @@ class ReinforcementLearner():
             rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
 
         # Update value_grad
-        _, advantage = sess.run([vg_optimizer, vg_advantage], feed_dict={vg_obs: observations,
+        _, advantages = sess.run([vg_optimizer, vg_advantage], feed_dict={vg_obs: observations,
                                               vg_val: rewards})
         
+        # Update policy_grad
+        for (observation, action, advantage) in zip(observations, actions, advantages):
+            _ = sess.run(pg_optimizer, feed_dict={pg_obs: observation, pg_action: action, pg_advantage: advantage})
   
 def main():
     env = gym.make("MountainCar-v0")
 
     # Build network
     learner = ReinforcementLearner(env)
-    pg_obs, pg_prob = learner.policy_grad()
+    pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer = learner.policy_grad()
     vg_obs, vg_val, vg_optimizer, vg_advantage = learner.value_grad()
    
     # Run episode
@@ -109,7 +126,7 @@ def main():
 
         for _ in xrange(5):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
-            learner.update_param(sess, transition_tuple, pg_obs, pg_prob, vg_obs, vg_val, vg_optimizer, vg_advantage)
+            learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, vg_obs, vg_val, vg_optimizer, vg_advantage)
 
 if __name__ == "__main__":
     main()

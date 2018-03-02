@@ -43,8 +43,8 @@ class ReinforcementLearner():
     """
     def value_grad(self):
         # Build network
-        observation = tf.placeholder(tf.float32, [None, self.n_obs])
-        observed_value = tf.placeholder(tf.float32, [None])
+        observation = tf.placeholder(tf.float32, [None, self.n_obs], "vg_obs")
+        observed_value = tf.placeholder(tf.float32, [None, 1], "vg_value")
         w = tf.get_variable("vg_weight", [self.n_obs, 1])
         b = tf.get_variable("vg_bias", [1])
 
@@ -107,10 +107,10 @@ class ReinforcementLearner():
         # Update value_grad
         _, advantages = sess.run([vg_optimizer, vg_advantage], feed_dict={vg_obs: observations,
                                               vg_val: rewards})
-        
+       
         # Update policy_grad
         for (observation, action, advantage) in zip(observations, actions, advantages):
-            _ = sess.run(pg_optimizer, feed_dict={pg_obs: observation, pg_action: action, pg_advantage: advantage})
+            _ = sess.run(pg_optimizer, feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: action, pg_advantage: advantage})
   
 def main():
     env = gym.make("MountainCar-v0")

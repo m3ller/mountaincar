@@ -65,7 +65,7 @@ class ReinforcementLearner():
   
     """ Go through one episode (i.e. game) of Mountain Car
     """
-    def run_episode(self, sess, pg_obs, pg_prob):
+    def run_episode(self, sess, pg_obs, pg_prob, render_flag=False):
         observations = []
         actions = []
         rewards = []
@@ -74,7 +74,9 @@ class ReinforcementLearner():
         # Running policy_grad(observation) to produce actions in the game.
         observation = self.env.reset()   # initial observation
         for _ in xrange(200):
-            self.env.render()
+            if render_flag:
+                self.env.render()
+
             action_prob = sess.run(pg_prob, feed_dict={pg_obs: np.expand_dims(observation, 0)})
             action = np.argmax(action_prob)
             new_observation, reward, done, info = self.env.step(action)
@@ -107,7 +109,7 @@ class ReinforcementLearner():
         observations, actions, rewards = transition_tuple
 
         # Calculate observed value
-        gamma = 0.8
+        gamma = 0.9
         for i in xrange(2, len(rewards)+1):
             rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
 
@@ -131,9 +133,15 @@ def main():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        for _ in xrange(10):
+        for i in xrange(100):
+            if i % 10 == 0:
+                print i
+
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
             learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, vg_obs, vg_val, vg_optimizer, vg_advantage)
+
+        # Testing
+        learner.run_episode(sess, pg_obs, pg_prob, True)
 
 if __name__ == "__main__":
     main()

@@ -31,8 +31,10 @@ class ReinforcementLearner():
         # Update network parameters
         action = tf.placeholder(tf.float32, [self.n_act], "pg_act")
         advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
+
+        old_prob = tf.subtract((action + 1), 2*action)
         adjustment = tf.multiply(prob, action) * advantage  # BE WARY OF BROADCASTING
-        adj_prob = tf.add(prob, adjustment)  #TODO: substitute with adjustment, rather than add on
+        adj_prob = tf.add(old_prob, adjustment) 
         loss = tf.reduce_sum(tf.abs(adj_prob))
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
@@ -71,7 +73,7 @@ class ReinforcementLearner():
         # Play through a game.  
         # Running policy_grad(observation) to produce actions in the game.
         observation = self.env.reset()   # initial observation
-        for _ in xrange(100):
+        for _ in xrange(200):
             self.env.render()
             action_prob = sess.run(pg_prob, feed_dict={pg_obs: np.expand_dims(observation, 0)})
             action = np.argmax(action_prob)
@@ -129,7 +131,7 @@ def main():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        for _ in xrange(5):
+        for _ in xrange(10):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
             learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, vg_obs, vg_val, vg_optimizer, vg_advantage)
 

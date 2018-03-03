@@ -30,8 +30,9 @@ class ReinforcementLearner():
 
         # Update network parameters
         action = tf.placeholder(tf.float32, [self.n_act], "pg_act")
-        advantage = tf.placeholder(tf.float32, [self.n_act], "pg_advantage")
-        adj_prob = tf.multiply(prob, advantage)  # BE WARY OF BROADCASTING
+        advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
+        adjustment = tf.multiply(prob, action) * advantage  # BE WARY OF BROADCASTING
+        adj_prob = tf.add(prob, adjustment)  #TODO: substitute with adjustment, rather than add on
         loss = tf.reduce_sum(tf.abs(adj_prob))
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 

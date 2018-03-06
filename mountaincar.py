@@ -32,11 +32,8 @@ class ReinforcementLearner():
         action = tf.placeholder(tf.float32, [self.n_act], "pg_act")
         advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
 
-        old_prob = tf.subtract((action + 1), 2*action)
         adjustment = tf.multiply(prob, action) * advantage  # BE WARY OF BROADCASTING
-        adj_prob = tf.add(old_prob, adjustment) 
-        loss = -tf.reduce_sum(tf.abs(adj_prob))
-        #loss = -tf.reduce_sum(adjustment)
+        loss = -tf.reduce_sum(adjustment)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Produces an action probability and selects with this distribution

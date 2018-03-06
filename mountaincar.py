@@ -35,7 +35,7 @@ class ReinforcementLearner():
         old_prob = tf.subtract((action + 1), 2*action)
         adjustment = tf.multiply(prob, action) * advantage  # BE WARY OF BROADCASTING
         adj_prob = tf.add(old_prob, adjustment) 
-        loss = tf.reduce_sum(tf.abs(adj_prob))
+        loss = -tf.reduce_sum(tf.abs(adj_prob))
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Produces an action probability and selects with this distribution
@@ -133,7 +133,7 @@ def main():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        for i in xrange(100):
+        for i in xrange(500):
             if i % 10 == 0:
                 print i
 

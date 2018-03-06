@@ -36,6 +36,7 @@ class ReinforcementLearner():
         adjustment = tf.multiply(prob, action) * advantage  # BE WARY OF BROADCASTING
         adj_prob = tf.add(old_prob, adjustment) 
         loss = -tf.reduce_sum(tf.abs(adj_prob))
+        #loss = -tf.reduce_sum(adjustment)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Produces an action probability and selects with this distribution
@@ -48,11 +49,17 @@ class ReinforcementLearner():
         # Build network
         observation = tf.placeholder(tf.float32, [None, self.n_obs], "vg_obs")
         observed_value = tf.placeholder(tf.float32, [None, 1], "vg_value")
-        w = tf.get_variable("vg_weight", [self.n_obs, 1])
-        b = tf.get_variable("vg_bias", [1])
+
+        n_hidden = 4
+        w1 = tf.get_variable("vg_w1", [self.n_obs, n_hidden])
+        b1 = tf.get_variable("vg_b1", [n_hidden])
+        w2 = tf.get_variable("vg_w2", [n_hidden, 1])
+        b2 = tf.get_variable("vg_b2", [1])
+
+        temp_value = tf.matmul(observation, w1) + b1
+        expected_value = tf.matmul(temp_value, w2) + b2
 
         # Calculate and improve V(s) approximation
-        expected_value = tf.matmul(observation, w) + b
         diff = expected_value - observed_value
         loss = tf.reduce_sum(tf.abs(diff))
         optimizer = tf.train.AdamOptimizer().minimize(loss)

@@ -13,7 +13,6 @@ class ReinforcementLearner():
   
     #TODO: add tensorboard
     #TODO: batch the games
-    #TODO: figure out normalized way to calculate advantage
     #TODO: consider regularizing params
     """ Policy network tries to learn the 'best' policy by trying to optimize
     over the predicted reward (as given by value_grad(..)).
@@ -21,11 +20,16 @@ class ReinforcementLearner():
     def policy_grad(self):
         # Build network
         observation = tf.placeholder(tf.float32, [1, self.n_obs], "pg_obs")
-        w = tf.get_variable("pg_weight", [self.n_obs, self.n_act])
-        b = tf.get_variable("pg_bias", [1, self.n_act])
+
+        n_hidden = 4
+        w1 = tf.get_variable("pg_w1", [self.n_obs, n_hidden])
+        b1 = tf.get_variable("pg_b1", [1, n_hidden])
+        w2 = tf.get_variable("pg_w2", [n_hidden, self.n_act])
+        b2 = tf.get_variable("pg_b2", [1, self.n_act])
 
         # Calculate probability
-        logp = tf.matmul(observation, w) + b
+        temp_logp = tf.matmul(observation, w1) + b1
+        logp = tf.matmul(temp_logp, w2) + b2
         prob = tf.nn.softmax(logp)
 
         # Update network parameters

@@ -32,7 +32,7 @@ class ReinforcementLearner():
         logp = tf.matmul(temp_logp, w2) + b2
         prob = tf.nn.softmax(logp)
 
-        # Update network parameters
+        # Update network parameters with advantage
         action = tf.placeholder(tf.float32, [self.n_act], "pg_act")
         advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
 
@@ -40,9 +40,11 @@ class ReinforcementLearner():
         loss = -tf.reduce_sum(adjustment)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
-        # Produces an action probability and selects with this distribution
-        # return action, act_loss, optimizer
-        return observation, prob, action, advantage, optimizer
+        # Store on TensorBoard
+        tf.summary.scalar("loss", loss)
+        summary_op = tf.summary.merge_all()
+
+        return observation, prob, action, advantage, optimizer, summary_op
   
     """ Value network learns to predict the EXPECTED reward of a given state.
     """
@@ -113,7 +115,7 @@ class ReinforcementLearner():
 
     Update is dependent on the observed rewards from the previous game.
     """
-    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, vg_obs, vg_val, vg_optimizer, vg_advantage):
+    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary, vg_obs, vg_val, vg_optimizer, vg_advantage):
         observations, actions, rewards = transition_tuple
 
         # Calculate observed value
@@ -127,26 +129,31 @@ class ReinforcementLearner():
        
         # Update policy_grad
         for (observation, action, advantage) in zip(observations, actions, advantages):
-            _ = sess.run(pg_optimizer, feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: action, pg_advantage: advantage})
+            _, summary = sess.run([pg_optimizer, pg_summary], feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: action, pg_advantage: advantage})
+
+        #TODO: Check that this works properly
+        return summary
   
 def main():
     env = gym.make("MountainCar-v0")
 
     # Build network
     learner = ReinforcementLearner(env)
-    pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer = learner.policy_grad()
+    pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary = learner.policy_grad()
     vg_obs, vg_val, vg_optimizer, vg_advantage = learner.value_grad()
    
     # Run episode
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
+        train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
 
         for i in xrange(500):
-            if i % 10 == 0:
+            if i % 50 == 0:
                 print i
 
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
-            learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, vg_obs, vg_val, vg_optimizer, vg_advantage)
+            summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary, vg_obs, vg_val, vg_optimizer, vg_advantage)
+            train_writer.add_summary(summary, i)
 
         # Testing
         learner.run_episode(sess, pg_obs, pg_prob, True)

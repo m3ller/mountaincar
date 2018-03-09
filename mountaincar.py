@@ -39,17 +39,17 @@ class ReinforcementLearner():
         action = tf.placeholder(tf.float32, [self.n_act], "pg_act")
         advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
 
-        adjustment = tf.multiply(prob, action) * advantage  # BE WARY OF BROADCASTING
+        adjustment = tf.log(tf.multiply(prob, action)) * advantage  # BE WARY OF BROADCASTING
         reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         reg_constant = 0.1
-        loss = -tf.reduce_sum(tf.log(adjustment)) + reg_constant * tf.reduce_sum(reg_losses)
+        loss = -tf.reduce_sum(adjustment) + reg_constant * tf.reduce_sum(reg_losses)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Store on TensorBoard
-        tf.summary.scalar("loss", loss)
-        summary_op = tf.summary.merge_all()
+        summary_loss = tf.summary.scalar("pg_loss", loss)
+        #summary_op = tf.summary.merge_all()
 
-        return observation, prob, action, advantage, optimizer, summary_op
+        return observation, prob, action, advantage, optimizer, summary_loss
   
     """ Value network learns to predict the EXPECTED reward of a given state.
     """
@@ -84,7 +84,10 @@ class ReinforcementLearner():
         #advantage = tf.exp(diff)
         advantage = diff
 
-        return observation, observed_value, optimizer, advantage
+        # Store on TensorBoard
+        summary_loss = tf.summary.scalar("vg_loss", loss)
+
+        return observation, observed_value, optimizer, advantage, summary_loss
   
     """ Go through one episode (i.e. game) of Mountain Car
     """
@@ -128,7 +131,7 @@ class ReinforcementLearner():
 
     Update is dependent on the observed rewards from the previous game.
     """
-    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary, vg_obs, vg_val, vg_optimizer, vg_advantage):
+    def update_param(self, sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss, vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss):
         observations, actions, rewards = transition_tuple
 
         # Calculate observed value
@@ -137,15 +140,15 @@ class ReinforcementLearner():
             rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
 
         # Update value_grad
-        _, advantages = sess.run([vg_optimizer, vg_advantage], feed_dict={vg_obs: observations,
+        _, advantages, vg_loss = sess.run([vg_optimizer, vg_advantage, vg_summary_loss], feed_dict={vg_obs: observations,
                                               vg_val: rewards})
        
         # Update policy_grad
         for (observation, action, advantage) in zip(observations, actions, advantages):
-            _, summary = sess.run([pg_optimizer, pg_summary], feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: action, pg_advantage: advantage})
+            _, pg_loss = sess.run([pg_optimizer, pg_summary_loss], feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: action, pg_advantage: advantage})
 
         #TODO: Check that this works properly
-        return summary
+        return vg_loss, pg_loss
   
 def main():
     #env = gym.make("MountainCar-v0")
@@ -153,8 +156,8 @@ def main():
 
     # Build network
     learner = ReinforcementLearner(env)
-    pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary = learner.policy_grad()
-    vg_obs, vg_val, vg_optimizer, vg_advantage = learner.value_grad()
+    pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss = learner.policy_grad()
+    vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss = learner.value_grad()
    
     # Run episode
     with tf.Session() as sess:
@@ -163,8 +166,9 @@ def main():
 
         for i in xrange(2000):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
-            summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary, vg_obs, vg_val, vg_optimizer, vg_advantage)
-            train_writer.add_summary(summary, i)
+            vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss, vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss)
+            train_writer.add_summary(vg_summary, i)
+            train_writer.add_summary(pg_summary, i)
 
         # Testing
         learner.run_episode(sess, pg_obs, pg_prob, True)

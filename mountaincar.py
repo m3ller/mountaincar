@@ -22,34 +22,36 @@ class ReinforcementLearner():
         n_hidden = 16
         w1 = tf.get_variable("pg_w1", [self.n_obs, n_hidden])
         b1 = tf.get_variable("pg_b1", [1, n_hidden])
-        #w2 = tf.get_variable("pg_w2", [n_hidden, n_hidden])
-        #b2 = tf.get_variable("pg_b2", [1, n_hidden])
+        w2 = tf.get_variable("pg_w2", [n_hidden, n_hidden])
+        b2 = tf.get_variable("pg_b2", [1, n_hidden])
         w3 = tf.get_variable("pg_w3", [n_hidden, self.n_act])
         b3 = tf.get_variable("pg_b3", [1, self.n_act])
 
         # Calculate probability
         temp_logp = tf.matmul(observation, w1) + b1
         temp_logp = tf.nn.relu(temp_logp)
-        #temp_logp = tf.matmul(temp_logp, w2) + b2
-        #temp_logp = tf.nn.relu(temp_logp)
+        temp_logp = tf.matmul(temp_logp, w2) + b2
+        temp_logp = tf.nn.relu(temp_logp)
         logp = tf.matmul(temp_logp, w3) + b3
-        prob = tf.nn.softmax(logp)
+        #prob = tf.nn.softmax(logp) 
 
         # Update network parameters with advantage
-        action = tf.placeholder(tf.float32, [self.n_act], "pg_act")
+        action = tf.placeholder(tf.float32, [1,self.n_act], "pg_act")
         advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
 
-        adjustment = tf.log(tf.multiply(prob, action)) * advantage  # BE WARY OF BROADCASTING
-        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-        reg_constant = 0.1
-        loss = -tf.reduce_sum(adjustment) + reg_constant * tf.reduce_sum(reg_losses)
+        #adjustment = tf.log(tf.multiply(prob, action)+1) * advantage  # BE WARY OF BROADCASTING
+        adjustment = tf.losses.softmax_cross_entropy(action, logp, weights=advantage)
+        #reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        #reg_constant = 0.1
+        loss = -tf.reduce_sum(adjustment) #+ reg_constant * tf.reduce_sum(reg_losses)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Store on TensorBoard
         summary_loss = tf.summary.scalar("pg_loss", loss)
         #summary_op = tf.summary.merge_all()
 
-        return observation, prob, action, advantage, optimizer, summary_loss
+        #return observation, prob, action, advantage, optimizer, summary_loss
+        return observation, logp, action, advantage, optimizer, summary_loss
   
     """ Value network learns to predict the EXPECTED reward of a given state.
     """
@@ -81,8 +83,8 @@ class ReinforcementLearner():
 
         # Calculate the advantage
         # TODO: May need to fiddle with this advantage
-        #advantage = tf.exp(diff)
-        advantage = diff
+        advantage = tf.exp(diff)
+        #advantage = diff
 
         # Store on TensorBoard
         summary_loss = tf.summary.scalar("vg_loss", loss)
@@ -145,7 +147,7 @@ class ReinforcementLearner():
        
         # Update policy_grad
         for (observation, action, advantage) in zip(observations, actions, advantages):
-            _, pg_loss = sess.run([pg_optimizer, pg_summary_loss], feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: action, pg_advantage: advantage})
+            _, pg_loss = sess.run([pg_optimizer, pg_summary_loss], feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: np.expand_dims(action, 0), pg_advantage: advantage})
 
         #TODO: Check that this works properly
         return vg_loss, pg_loss

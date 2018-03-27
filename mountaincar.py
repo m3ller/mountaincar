@@ -40,9 +40,13 @@ class ReinforcementLearner():
         advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
 
         #adjustment = tf.log(tf.multiply(prob, action)+1) * advantage  # BE WARY OF BROADCASTING
-        adjustment = tf.losses.softmax_cross_entropy(action, logp, weights=advantage)
+        #adjustment = tf.losses.softmax_cross_entropy(action, logp, weights=advantage)
+        adjustment = tf.reduce_sum(tf.multiply(logp, action)) * advantage  # BE WARY OF BROADCASTING
+        adjustment = tf.log(adjustment)
+
         #reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         #reg_constant = 0.1
+        #loss = -tf.reduce_sum(adjustment) #+ reg_constant * tf.reduce_sum(reg_losses)
         loss = -tf.reduce_sum(adjustment) #+ reg_constant * tf.reduce_sum(reg_losses)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
@@ -166,7 +170,7 @@ def main():
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
 
-        for i in xrange(2000):
+        for i in xrange(5000):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
             vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss, vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss)
             train_writer.add_summary(vg_summary, i)

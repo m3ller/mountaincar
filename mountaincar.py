@@ -30,31 +30,20 @@ class ReinforcementLearner():
         # Calculate probability
         temp_logp = tf.matmul(observation, w1) + b1
         temp_logp = tf.nn.relu(temp_logp)
-        temp_logp = tf.matmul(temp_logp, w2) + b2
-        temp_logp = tf.nn.relu(temp_logp)
         logp = tf.matmul(temp_logp, w3) + b3
-        #prob = tf.nn.softmax(logp) 
+        logp = tf.nn.softmax(logp)
 
         # Update network parameters with advantage
         action = tf.placeholder(tf.float32, [1,self.n_act], "pg_act")
         advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
 
-        #adjustment = tf.log(tf.multiply(prob, action)+1) * advantage  # BE WARY OF BROADCASTING
-        #adjustment = tf.losses.softmax_cross_entropy(action, logp, weights=advantage)
         adjustment = tf.reduce_sum(tf.multiply(logp, action)) * advantage  # BE WARY OF BROADCASTING
         adjustment = tf.log(adjustment)
-
-        #reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-        #reg_constant = 0.1
-        #loss = -tf.reduce_sum(adjustment) #+ reg_constant * tf.reduce_sum(reg_losses)
         loss = -tf.reduce_sum(adjustment) #+ reg_constant * tf.reduce_sum(reg_losses)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Store on TensorBoard
         summary_loss = tf.summary.scalar("pg_loss", loss)
-        #summary_op = tf.summary.merge_all()
-
-        #return observation, prob, action, advantage, optimizer, summary_loss
         return observation, logp, action, advantage, optimizer, summary_loss
   
     """ Value network learns to predict the EXPECTED reward of a given state.
@@ -92,7 +81,6 @@ class ReinforcementLearner():
 
         # Store on TensorBoard
         summary_loss = tf.summary.scalar("vg_loss", loss)
-
         return observation, observed_value, optimizer, advantage, summary_loss
   
     """ Go through one episode (i.e. game) of Mountain Car
@@ -110,7 +98,9 @@ class ReinforcementLearner():
                 self.env.render()
 
             action_prob = sess.run(pg_prob, feed_dict={pg_obs: np.expand_dims(observation, 0)})
-            action = np.argmax(action_prob)
+            #action = np.argmax(action_prob)
+            print action_prob[0]
+            action = 0 if np.random.rand() < action_prob[0][0] else 2
             new_observation, reward, done, info = self.env.step(action)
 
             # Store transistions and update
@@ -157,8 +147,8 @@ class ReinforcementLearner():
         return vg_loss, pg_loss
   
 def main():
-    #env = gym.make("MountainCar-v0")
-    env = gym.make("CartPole-v0")
+    env = gym.make("MountainCar-v0")
+    #env = gym.make("CartPole-v0")
 
     # Build network
     learner = ReinforcementLearner(env)
@@ -170,8 +160,8 @@ def main():
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
 
-        for i in xrange(5000):
-            transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
+        for i in xrange(2000):
+            transition_tuple = learner.run_episode(sess, pg_obs, pg_prob, True)
             vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss, vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss)
             train_writer.add_summary(vg_summary, i)
             train_writer.add_summary(pg_summary, i)

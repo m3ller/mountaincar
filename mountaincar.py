@@ -43,8 +43,11 @@ class ReinforcementLearner():
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Store on TensorBoard
-        summary_loss = tf.summary.scalar("pg_loss", loss)
-        return observation, logp, action, advantage, optimizer, summary_loss
+        tf.summary.scalar("pg_loss", loss)
+        tf.summary.histogram("pg_logp", logp)
+        summary_op = tf.summary.merge_all()
+
+        return observation, logp, action, advantage, optimizer, summary_op
   
     """ Value network learns to predict the EXPECTED reward of a given state.
     """
@@ -99,8 +102,7 @@ class ReinforcementLearner():
 
             action_prob = sess.run(pg_prob, feed_dict={pg_obs: np.expand_dims(observation, 0)})
             #action = np.argmax(action_prob)
-            print action_prob[0]
-            action = 0 if np.random.rand() < action_prob[0][0] else 2
+            action = np.random.choice(range(self.n_act), 1, p=action_prob[0])[0]
             new_observation, reward, done, info = self.env.step(action)
 
             # Store transistions and update
@@ -147,8 +149,8 @@ class ReinforcementLearner():
         return vg_loss, pg_loss
   
 def main():
-    env = gym.make("MountainCar-v0")
-    #env = gym.make("CartPole-v0")
+    #env = gym.make("MountainCar-v0")
+    env = gym.make("CartPole-v0")
 
     # Build network
     learner = ReinforcementLearner(env)
@@ -160,8 +162,8 @@ def main():
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
 
-        for i in xrange(2000):
-            transition_tuple = learner.run_episode(sess, pg_obs, pg_prob, True)
+        for i in xrange(5000):
+            transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
             vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss, vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss)
             train_writer.add_summary(vg_summary, i)
             train_writer.add_summary(pg_summary, i)

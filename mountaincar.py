@@ -31,23 +31,23 @@ class ReinforcementLearner():
         temp_logp = tf.matmul(observation, w1) + b1
         temp_logp = tf.nn.relu(temp_logp)
         logp = tf.matmul(temp_logp, w3) + b3
-        logp = tf.nn.softmax(logp)
+        prob = tf.nn.softmax(logp)
 
         # Update network parameters with advantage
         action = tf.placeholder(tf.float32, [1,self.n_act], "pg_act")
         advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
 
-        adjustment = tf.reduce_sum(tf.multiply(logp, action)) * advantage  # BE WARY OF BROADCASTING
-        adjustment = tf.log(adjustment)
+        adjustment = tf.reduce_sum(tf.multiply(prob, action)) * advantage  # BE WARY OF BROADCASTING
+        #adjustment = tf.log(adjustment)
         loss = -tf.reduce_sum(adjustment) #+ reg_constant * tf.reduce_sum(reg_losses)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Store on TensorBoard
-        tf.summary.scalar("pg_loss", loss)
-        tf.summary.histogram("pg_logp", logp)
-        summary_op = tf.summary.merge_all()
+        smy_pg_loss = tf.summary.scalar("pg_loss", loss)
+        smy_pg_prob = tf.summary.histogram("pg_prob", prob)
+        smy_op = tf.summary.merge([smy_pg_loss, smy_pg_prob])
 
-        return observation, logp, action, advantage, optimizer, summary_op
+        return observation, prob, action, advantage, optimizer, smy_op
   
     """ Value network learns to predict the EXPECTED reward of a given state.
     """
@@ -59,32 +59,34 @@ class ReinforcementLearner():
         n_hidden = 16
         w1 = tf.get_variable("vg_w1", [self.n_obs, n_hidden])
         b1 = tf.get_variable("vg_b1", [n_hidden])
-        #w2 = tf.get_variable("vg_w2", [n_hidden, n_hidden])
-        #b2 = tf.get_variable("vg_b2", [n_hidden])
+        w2 = tf.get_variable("vg_w2", [n_hidden, n_hidden])
+        b2 = tf.get_variable("vg_b2", [n_hidden])
         w3 = tf.get_variable("vg_w3", [n_hidden, 1])
         b3 = tf.get_variable("vg_b3", [1])
 
         temp_value = tf.matmul(observation, w1) + b1
         temp_value = tf.nn.relu(temp_value)
-        #temp_value = tf.matmul(temp_value, w2) + b2
-        #temp_value = tf.nn.relu(temp_value)
+        temp_value = tf.matmul(temp_value, w2) + b2
+        temp_value = tf.nn.relu(temp_value)
         expected_value = tf.matmul(temp_value, w3) + b3
 
         # Calculate and improve V(s) approximation
-        diff = observed_value - expected_value
+        diffs = observed_value - expected_value
         reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         reg_constant = 0.1
-        loss = tf.nn.l2_loss(diff)
+        loss = tf.nn.l2_loss(diffs)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Calculate the advantage
         # TODO: May need to fiddle with this advantage
-        advantage = tf.exp(diff)
-        #advantage = diff
+        #advantages = tf.exp(diffs)
+        advantages = diffs
 
         # Store on TensorBoard
-        summary_loss = tf.summary.scalar("vg_loss", loss)
-        return observation, observed_value, optimizer, advantage, summary_loss
+        smy_vg_loss = tf.summary.scalar("vg_loss", loss)
+        smy_vg_advantage = tf.summary.histogram("vg_advantage", advantages)
+        summary_op = tf.summary.merge([smy_vg_loss, smy_vg_advantage])
+        return observation, observed_value, optimizer, advantages, summary_op
   
     """ Go through one episode (i.e. game) of Mountain Car
     """
@@ -101,7 +103,6 @@ class ReinforcementLearner():
                 self.env.render()
 
             action_prob = sess.run(pg_prob, feed_dict={pg_obs: np.expand_dims(observation, 0)})
-            #action = np.argmax(action_prob)
             action = np.random.choice(range(self.n_act), 1, p=action_prob[0])[0]
             new_observation, reward, done, info = self.env.step(action)
 
@@ -140,7 +141,7 @@ class ReinforcementLearner():
         # Update value_grad
         _, advantages, vg_loss = sess.run([vg_optimizer, vg_advantage, vg_summary_loss], feed_dict={vg_obs: observations,
                                               vg_val: rewards})
-       
+
         # Update policy_grad
         for (observation, action, advantage) in zip(observations, actions, advantages):
             _, pg_loss = sess.run([pg_optimizer, pg_summary_loss], feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: np.expand_dims(action, 0), pg_advantage: advantage})

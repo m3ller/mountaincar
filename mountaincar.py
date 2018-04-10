@@ -29,9 +29,9 @@ class ReinforcementLearner():
 
         # Calculate probability
         temp_logp = tf.matmul(observation, w1) + b1
-        # temp_logp = tf.nn.relu(temp_logp)
+        temp_logp = tf.nn.relu(temp_logp)
         temp_logp = tf.matmul(temp_logp, w2) + b2
-        # temp_logp = tf.nn.relu(temp_logp)
+        temp_logp = tf.nn.relu(temp_logp)
         logp = tf.matmul(temp_logp, w3) + b3
         prob = tf.nn.softmax(logp)
 
@@ -142,35 +142,35 @@ class ReinforcementLearner():
             rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
 
         # Update value_grad
-        _, advantages, vg_loss = sess.run([vg_optimizer, vg_advantage, vg_summary_loss], feed_dict={vg_obs: observations,
-                                              vg_val: rewards})
+        _, advantages, vg_loss = \
+                sess.run([vg_optimizer, vg_advantage, vg_summary_loss],\
+                feed_dict={vg_obs: observations, vg_val: rewards})
 
         # Update policy_grad
-        '''
-        for (observation, action, advantage) in zip(observations, actions, advantages):
-            _, pg_loss = sess.run([pg_optimizer, pg_summary_loss], feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: np.expand_dims(action, 0), pg_advantage: advantage})
-        '''
-        _, pg_loss = sess.run([pg_optimizer, pg_summary_loss], feed_dict={pg_obs: observations, pg_action: actions, pg_advantage: advantages.ravel()})
-        #TODO: Check that this works properly
+        _, pg_loss = \
+                sess.run([pg_optimizer, pg_summary_loss],\
+                feed_dict={pg_obs: observations,\
+                           pg_action:actions,\
+                           pg_advantage: advantages.ravel()})
         return vg_loss, pg_loss
   
 def main():
-    env = gym.make("MountainCar-v0")
-    #env = gym.make("CartPole-v0")
+    #env = gym.make("MountainCar-v0")
+    env = gym.make("CartPole-v0")
 
     # Build network
     learner = ReinforcementLearner(env)
-    pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss = learner.policy_grad()
-    vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss = learner.value_grad()
+    pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop = learner.policy_grad()
+    vg_obs, vg_val, vg_opt, vg_adv, vg_sumop = learner.value_grad()
    
     # Run episode
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
 
-        for i in xrange(1000):
+        for i in xrange(2000):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
-            vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss, vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss)
+            vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop, vg_obs, vg_val, vg_opt, vg_adv, vg_sumop)
             train_writer.add_summary(vg_summary, i)
             train_writer.add_summary(pg_summary, i)
 

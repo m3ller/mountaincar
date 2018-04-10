@@ -168,11 +168,13 @@ def main():
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
 
-        for i in xrange(2000):
+        for i in xrange(4000):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
-            vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop, vg_obs, vg_val, vg_opt, vg_adv, vg_sumop)
-            train_writer.add_summary(vg_summary, i)
-            train_writer.add_summary(pg_summary, i)
+
+            if i % 100 == 0:
+                vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop, vg_obs, vg_val, vg_opt, vg_adv, vg_sumop)
+                train_writer.add_summary(vg_summary, i)
+                train_writer.add_summary(pg_summary, i)
 
         # Testing
         learner.run_episode(sess, pg_obs, pg_prob, True)

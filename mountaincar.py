@@ -17,9 +17,9 @@ class ReinforcementLearner():
     """
     def policy_grad(self):
         # Build network
-        observation = tf.placeholder(tf.float32, [1, self.n_obs], "pg_obs")
+        observation = tf.placeholder(tf.float32, [None, self.n_obs], "pg_obs")
 
-        n_hidden = 16
+        n_hidden = 4
         w1 = tf.get_variable("pg_w1", [self.n_obs, n_hidden])
         b1 = tf.get_variable("pg_b1", [1, n_hidden])
         w2 = tf.get_variable("pg_w2", [n_hidden, n_hidden])
@@ -29,15 +29,18 @@ class ReinforcementLearner():
 
         # Calculate probability
         temp_logp = tf.matmul(observation, w1) + b1
-        temp_logp = tf.nn.relu(temp_logp)
+        # temp_logp = tf.nn.relu(temp_logp)
+        temp_logp = tf.matmul(temp_logp, w2) + b2
+        # temp_logp = tf.nn.relu(temp_logp)
         logp = tf.matmul(temp_logp, w3) + b3
         prob = tf.nn.softmax(logp)
 
         # Update network parameters with advantage
-        action = tf.placeholder(tf.float32, [1,self.n_act], "pg_act")
-        advantage = tf.placeholder(tf.float32, [1], "pg_advantage")
+        action = tf.placeholder(tf.float32, [None, self.n_act], "pg_act")
+        advantage = tf.placeholder(tf.float32, [None], "pg_advantage")
 
-        adjustment = tf.reduce_sum(tf.multiply(prob, action)) * advantage  # BE WARY OF BROADCASTING
+        adjustment = tf.log(tf.reduce_sum(tf.multiply(prob, action), axis=1))
+        adjustment = tf.multiply(adjustment, advantage)  # BE WARY OF BROADCASTING
         #adjustment = tf.log(adjustment)
         loss = -tf.reduce_sum(adjustment) #+ reg_constant * tf.reduce_sum(reg_losses)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
@@ -143,15 +146,17 @@ class ReinforcementLearner():
                                               vg_val: rewards})
 
         # Update policy_grad
+        '''
         for (observation, action, advantage) in zip(observations, actions, advantages):
             _, pg_loss = sess.run([pg_optimizer, pg_summary_loss], feed_dict={pg_obs: np.expand_dims(observation, 0), pg_action: np.expand_dims(action, 0), pg_advantage: advantage})
-
+        '''
+        _, pg_loss = sess.run([pg_optimizer, pg_summary_loss], feed_dict={pg_obs: observations, pg_action: actions, pg_advantage: advantages.ravel()})
         #TODO: Check that this works properly
         return vg_loss, pg_loss
   
 def main():
-    #env = gym.make("MountainCar-v0")
-    env = gym.make("CartPole-v0")
+    env = gym.make("MountainCar-v0")
+    #env = gym.make("CartPole-v0")
 
     # Build network
     learner = ReinforcementLearner(env)
@@ -163,7 +168,7 @@ def main():
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
 
-        for i in xrange(5000):
+        for i in xrange(1000):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
             vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss, vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss)
             train_writer.add_summary(vg_summary, i)

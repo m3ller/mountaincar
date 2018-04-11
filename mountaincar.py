@@ -19,7 +19,7 @@ class ReinforcementLearner():
         # Build network
         observation = tf.placeholder(tf.float32, [None, self.n_obs], "pg_obs")
 
-        n_hidden = 4
+        n_hidden = 8
         w1 = tf.get_variable("pg_w1", [self.n_obs, n_hidden])
         b1 = tf.get_variable("pg_b1", [1, n_hidden])
         w2 = tf.get_variable("pg_w2", [n_hidden, n_hidden])
@@ -39,9 +39,10 @@ class ReinforcementLearner():
         action = tf.placeholder(tf.float32, [None, self.n_act], "pg_act")
         advantage = tf.placeholder(tf.float32, [None], "pg_advantage")
 
-        adjustment = tf.log(tf.reduce_sum(tf.multiply(prob, action), axis=1))
-        adjustment = tf.multiply(adjustment, advantage)  # BE WARY OF BROADCASTING
+        #adjustment = tf.log(tf.reduce_sum(tf.multiply(prob, action), axis=1))
+        adjustment = tf.reduce_sum(tf.multiply(prob, action), axis=1)
         #adjustment = tf.log(adjustment)
+        adjustment = tf.multiply(adjustment, advantage)  # BE WARY OF BROADCASTING
         loss = -tf.reduce_sum(adjustment) #+ reg_constant * tf.reduce_sum(reg_losses)
         optimizer = tf.train.AdamOptimizer().minimize(loss)
 
@@ -136,22 +137,24 @@ class ReinforcementLearner():
     def update_param(self, sess, transition_tuple, pg_obs, pg_prob, pg_action, pg_advantage, pg_optimizer, pg_summary_loss, vg_obs, vg_val, vg_optimizer, vg_advantage, vg_summary_loss):
         observations, actions, rewards = transition_tuple
 
-        # Calculate observed value
+        # Calculate observed reward
         gamma = 0.97
         for i in xrange(2, len(rewards)+1):
             rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
 
+        # Calculate advantage
+        advantages = sess.run(vg_advantage,\
+                      feed_dict={vg_obs: observations, vg_val: rewards})
+
         # Update value_grad
-        _, advantages, vg_loss = \
-                sess.run([vg_optimizer, vg_advantage, vg_summary_loss],\
-                feed_dict={vg_obs: observations, vg_val: rewards})
+        _, vg_loss = sess.run([vg_optimizer, vg_summary_loss],\
+                      feed_dict={vg_obs: observations, vg_val: rewards})
 
         # Update policy_grad
-        _, pg_loss = \
-                sess.run([pg_optimizer, pg_summary_loss],\
-                feed_dict={pg_obs: observations,\
-                           pg_action:actions,\
-                           pg_advantage: advantages.ravel()})
+        _, pg_loss = sess.run([pg_optimizer, pg_summary_loss],\
+                      feed_dict={pg_obs: observations,\
+                                 pg_action:actions,\
+                                 pg_advantage: advantages.ravel()})
         return vg_loss, pg_loss
   
 def main():
@@ -168,11 +171,11 @@ def main():
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
 
-        for i in xrange(4000):
+        for i in xrange(2000):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
+            vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop, vg_obs, vg_val, vg_opt, vg_adv, vg_sumop)
 
             if i % 100 == 0:
-                vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop, vg_obs, vg_val, vg_opt, vg_adv, vg_sumop)
                 train_writer.add_summary(vg_summary, i)
                 train_writer.add_summary(pg_summary, i)
 

@@ -19,21 +19,21 @@ class ReinforcementLearner():
         # Build network
         observation = tf.placeholder(tf.float32, [None, self.n_obs], "pg_obs")
 
-        n_hidden = 6
+        n_hidden = 8
         w1 = tf.get_variable("pg_w1", [self.n_obs, n_hidden])
         b1 = tf.get_variable("pg_b1", [1, n_hidden])
         #w2 = tf.get_variable("pg_w2", [n_hidden, n_hidden])
         #b2 = tf.get_variable("pg_b2", [1, n_hidden])
         w3 = tf.get_variable("pg_w3", [n_hidden, self.n_act])
         b3 = tf.get_variable("pg_b3", [1, self.n_act])
-        w = tf.get_variable("pg_w", [self.n_obs, self.n_act])
+        #w = tf.get_variable("pg_w", [self.n_obs, self.n_act])
 
         # Calculate probability
         temp_logp = tf.matmul(observation, w1) + b1
-        #temp_logp = tf.nn.relu(temp_logp)
+        temp_logp = tf.nn.relu(temp_logp)
         #temp_logp = tf.matmul(temp_logp, w2) + b2
         #temp_logp = tf.nn.relu(temp_logp)
-        logp = tf.matmul(temp_logp, w3) + b3
+        logp = tf.matmul(temp_logp, w3) + b3 + tf.constant([1., 1., 1.])
         #logp = tf.matmul(observation, w)
         prob = tf.nn.softmax(logp)
 
@@ -114,7 +114,7 @@ class ReinforcementLearner():
             # Store transistions and update
             observations.append(observation)
             actions.append(action)
-            add_reward = abs(observation[0])
+            add_reward = observation[0]**2 * 10
             rewards.append(reward + add_reward)
             observation = new_observation[:]
 
@@ -140,7 +140,7 @@ class ReinforcementLearner():
         observations, actions, rewards = transition_tuple
 
         # Calculate observed reward
-        gamma = 0.8
+        gamma = 0.9
         for i in xrange(2, len(rewards)+1):
             rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
 
@@ -173,11 +173,12 @@ def main():
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
         
-        for i in xrange(2000):
+        for i in xrange(3000):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
             vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop, vg_obs, vg_val, vg_opt, vg_adv, vg_sumop)
 
-            if i % 100 == 0:
+            #if i % 100 == 0:
+            if i % 2 == 0:
                 train_writer.add_summary(vg_summary, i)
                 train_writer.add_summary(pg_summary, i)
         

@@ -18,6 +18,7 @@ class ReinforcementLearner():
     """
     def policy_grad(self):
         # Build network
+        global_step = tf.Variable(0, trainable=False)
         observation = tf.placeholder(tf.float32, [None, self.n_obs], "pg_obs")
 
         n_hidden = 4
@@ -37,7 +38,10 @@ class ReinforcementLearner():
         logp = tf.matmul(temp_logp, w3) + b3
         #logp = tf.matmul(observation, w)
         #prob = tf.nn.softmax(logp)
-        prob = tf.cond(tf.less(tf.random_uniform([1])[0], tf.constant(0.5)), lambda: logp, lambda: tf.ones(tf.shape(logp), tf.float32))
+
+        # Epsilon Greedy
+        threshold = tf.train.exponential_decay(0.8, global_step, 1000, 0.8, staircase=True)
+        prob = tf.cond(tf.less(tf.random_uniform([1])[0], threshold), lambda: tf.ones(tf.shape(logp), tf.float32), lambda: logp)
         prob = tf.nn.softmax(prob)
 
         # Update network parameters with advantage
@@ -50,7 +54,6 @@ class ReinforcementLearner():
         loss = -tf.reduce_sum(adjustment, axis=0) #+ reg_constant * tf.reduce_sum(reg_losses)
 
         # optimizer
-        global_step = tf.Variable(0, trainable=False)
         starter_learning_rate = 0.1
         learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,10000, 0.96, staircase=True)
         optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss)

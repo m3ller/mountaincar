@@ -36,7 +36,9 @@ class ReinforcementLearner():
         temp_logp = tf.nn.relu(temp_logp)
         logp = tf.matmul(temp_logp, w3) + b3
         #logp = tf.matmul(observation, w)
-        prob = tf.nn.softmax(logp)
+        #prob = tf.nn.softmax(logp)
+        prob = tf.cond(tf.less(tf.random_uniform([1])[0], tf.constant(0.5)), lambda: logp, lambda: tf.ones(tf.shape(logp), tf.float32))
+        prob = tf.nn.softmax(prob)
 
         # Update network parameters with advantage
         action = tf.placeholder(tf.float32, [None, self.n_act], "pg_act")

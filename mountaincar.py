@@ -2,6 +2,7 @@ import gym
 import numpy as np
 import tensorflow as tf
 
+#TODO: add epsilon greedy for exploration
 class ReinforcementLearner():
     # Environment doc: https://github.com/openai/gym/wiki/MountainCar-v0
     # Actions: [0]left push, [1]no push, [2]right push
@@ -19,11 +20,11 @@ class ReinforcementLearner():
         # Build network
         observation = tf.placeholder(tf.float32, [None, self.n_obs], "pg_obs")
 
-        n_hidden = 8
+        n_hidden = 4
         w1 = tf.get_variable("pg_w1", [self.n_obs, n_hidden])
         b1 = tf.get_variable("pg_b1", [1, n_hidden])
-        #w2 = tf.get_variable("pg_w2", [n_hidden, n_hidden])
-        #b2 = tf.get_variable("pg_b2", [1, n_hidden])
+        w2 = tf.get_variable("pg_w2", [n_hidden, n_hidden])
+        b2 = tf.get_variable("pg_b2", [1, n_hidden])
         w3 = tf.get_variable("pg_w3", [n_hidden, self.n_act])
         b3 = tf.get_variable("pg_b3", [1, self.n_act])
         #w = tf.get_variable("pg_w", [self.n_obs, self.n_act])
@@ -31,9 +32,9 @@ class ReinforcementLearner():
         # Calculate probability
         temp_logp = tf.matmul(observation, w1) + b1
         temp_logp = tf.nn.relu(temp_logp)
-        #temp_logp = tf.matmul(temp_logp, w2) + b2
-        #temp_logp = tf.nn.relu(temp_logp)
-        logp = tf.matmul(temp_logp, w3) + b3 + tf.constant([1., 1., 1.])
+        temp_logp = tf.matmul(temp_logp, w2) + b2
+        temp_logp = tf.nn.relu(temp_logp)
+        logp = tf.matmul(temp_logp, w3) + b3
         #logp = tf.matmul(observation, w)
         prob = tf.nn.softmax(logp)
 
@@ -49,7 +50,7 @@ class ReinforcementLearner():
         # optimizer
         global_step = tf.Variable(0, trainable=False)
         starter_learning_rate = 0.1
-        learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,100000, 0.96, staircase=True)
+        learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,10000, 0.96, staircase=True)
         optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss)
 
         # Store on TensorBoard
@@ -66,7 +67,7 @@ class ReinforcementLearner():
         observation = tf.placeholder(tf.float32, [None, self.n_obs], "vg_obs")
         observed_value = tf.placeholder(tf.float32, [None, 1], "vg_value")
 
-        n_hidden = 16
+        n_hidden = 5
         w1 = tf.get_variable("vg_w1", [self.n_obs, n_hidden])
         b1 = tf.get_variable("vg_b1", [n_hidden])
         w2 = tf.get_variable("vg_w2", [n_hidden, n_hidden])
@@ -85,7 +86,13 @@ class ReinforcementLearner():
         #reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         #reg_constant = 0.1
         loss = tf.nn.l2_loss(diffs)
-        optimizer = tf.train.AdamOptimizer().minimize(loss)
+
+        # optimizer
+        global_step = tf.Variable(0, trainable=False)
+        starter_learning_rate = 0.1
+        learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,10000, 0.96, staircase=True)
+        optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss)
+        #optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Calculate the advantage
         # TODO: May need to fiddle with this advantage
@@ -119,7 +126,8 @@ class ReinforcementLearner():
             # Store transistions and update
             observations.append(observation)
             actions.append(action)
-            add_reward = observation[0]**2 * 10
+            add_reward = observation[0]**2 * 50
+            #add_reward = observation[0] * 5
             rewards.append(reward + add_reward)
             observation = new_observation[:]
 
@@ -145,7 +153,7 @@ class ReinforcementLearner():
         observations, actions, rewards = transition_tuple
 
         # Calculate observed reward
-        gamma = 0.9
+        gamma = 0.93
         for i in xrange(2, len(rewards)+1):
             rewards[-i] += gamma * rewards[-i+1]    # Account for future reward
 
@@ -177,16 +185,16 @@ def main():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         train_writer = tf.summary.FileWriter("./tf_logs/", sess.graph)
-        
-        for i in xrange(3000):
+         
+        for i in xrange(2000):
             transition_tuple = learner.run_episode(sess, pg_obs, pg_prob)
             vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop, vg_obs, vg_val, vg_opt, vg_adv, vg_sumop)
 
             #if i % 100 == 0:
-            if i % 2 == 0:
+            if i % 50 == 0:
                 train_writer.add_summary(vg_summary, i)
                 train_writer.add_summary(pg_summary, i)
-        
+         
         # Testing
         learner.run_episode(sess, pg_obs, pg_prob, True)
 

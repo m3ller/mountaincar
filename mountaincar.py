@@ -40,7 +40,7 @@ class ReinforcementLearner():
         #prob = tf.nn.softmax(logp)
 
         # Epsilon Greedy
-        threshold = tf.train.exponential_decay(0.8, global_step, 1000, 0.8, staircase=True)
+        threshold = tf.train.exponential_decay(1.0, global_step, 100, 0.8, staircase=True)
         prob = tf.cond(tf.less(tf.random_uniform([1])[0], threshold), lambda: tf.ones(tf.shape(logp), tf.float32), lambda: logp)
         prob = tf.nn.softmax(prob)
 
@@ -56,12 +56,14 @@ class ReinforcementLearner():
         # optimizer
         starter_learning_rate = 0.1
         learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,10000, 0.96, staircase=True)
-        optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss)
+        optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss, global_step=global_step)
 
         # Store on TensorBoard
         smy_pg_loss = tf.summary.scalar("pg_loss", loss)
         smy_pg_prob = tf.summary.histogram("pg_prob", prob)
-        smy_op = tf.summary.merge([smy_pg_loss, smy_pg_prob])
+        smy_pg_thres = tf.summary.scalar("pg_theshold", threshold)
+        smy_pg_step = tf.summary.scalar("pg_step", global_step)
+        smy_op = tf.summary.merge([smy_pg_loss, smy_pg_prob, smy_pg_thres, smy_pg_step])
 
         return observation, prob, action, advantage, optimizer, smy_op
   
@@ -96,7 +98,7 @@ class ReinforcementLearner():
         global_step = tf.Variable(0, trainable=False)
         starter_learning_rate = 0.1
         learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,10000, 0.96, staircase=True)
-        optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss)
+        optimizer = tf.train.AdagradOptimizer(learning_rate).minimize(loss, global_step=global_step)
         #optimizer = tf.train.AdamOptimizer().minimize(loss)
 
         # Calculate the advantage
@@ -196,7 +198,7 @@ def main():
             vg_summary, pg_summary = learner.update_param(sess, transition_tuple, pg_obs, pg_prob, pg_act, pg_adv, pg_opt, pg_sumop, vg_obs, vg_val, vg_opt, vg_adv, vg_sumop)
 
             #if i % 100 == 0:
-            if i % 50 == 0:
+            if i % 2 == 0:
                 train_writer.add_summary(vg_summary, i)
                 train_writer.add_summary(pg_summary, i)
          
